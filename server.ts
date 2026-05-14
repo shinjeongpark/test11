@@ -7,12 +7,25 @@ import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
 
 // Initialize Yahoo Finance instance correctly for both ESM/CJS and bundles
-let yf: any = yfModule;
-if ((yfModule as any).default) {
-  yf = (yfModule as any).default;
-}
-if (typeof yf === 'function') {
-  yf = new yf();
+import * as yfAll from 'yahoo-finance2';
+
+// yahoo-finance2 v3 handling: the default export is the class, or the instance depending on the environment.
+// We use the createYahooFinance if we need to, but usually the default export is what we want.
+const baseModule: any = yfAll;
+const defaultExport: any = baseModule.default || baseModule;
+
+let yf: any;
+try {
+  // If it's the class, instantiate it.
+  if (typeof defaultExport === 'function') {
+    yf = new defaultExport();
+  } else {
+    // If it's already an instance or a modules object
+    yf = defaultExport;
+  }
+} catch (e) {
+  console.warn('Yahoo Finance standard initialization failed, falling back to simple instance.', e);
+  yf = defaultExport;
 }
 
 async function startServer() {
@@ -81,22 +94,25 @@ async function startServer() {
         ma20: 0
       };
 
-      try {
-        // Fetch multiple pages to get at least 48 days of history
-        for (let page = 1; page <= 3; page++) {
-          const naverUrl = `https://finance.naver.com/item/frgn.naver?code=${code}&page=${page}`;
-          const naverRes = await axios.get(naverUrl, {
+      const fetchPage = async (page: number) => {
+        try {
+          const url = `https://finance.naver.com/item/frgn.naver?code=${code}&page=${page}`;
+          const naverRes = await axios.get(url, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
               'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-              'Referer': `https://finance.naver.com/item/main.naver?code=${code}`
+              'Referer': `https://finance.naver.com/item/main.naver?code=${code}`,
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
             },
             responseType: 'arraybuffer',
-            timeout: 5000
+            timeout: 10000
           });
           const decodedNaverBody = iconv.decode(Buffer.from(naverRes.data), 'euc-kr');
           const $ = cheerio.load(decodedNaverBody);
           
+          const pageData: any[] = [];
           $('table.type2 tbody tr').each((i, el) => {
             const date = $(el).find('td:nth-child(1)').text().trim();
             if (!date || !/^\d{4}\.\d{2}\.\d{2}$/.test(date)) return;
@@ -113,7 +129,7 @@ async function startServer() {
             const floatingMarketCap = floatShares * price;
             const supplyDemandRatio = floatShares > 0 ? (totalNetBuyVol / floatShares) * 100 : 0;
 
-            historicalData.push({
+            pageData.push({
               date,
               price,
               changePercent: parseFloat(changePercent) || 0,
@@ -127,7 +143,18 @@ async function startServer() {
               isSweetSpot: supplyDemandRatio >= 0.3
             });
           });
+          return pageData;
+        } catch (err) {
+          console.warn(`Failed to fetch Naver Finance page ${page}:`, err instanceof Error ? err.message : err);
+          return [];
         }
+      };
+
+      try {
+        // Fetch pages in parallel for speed
+        const pagePromises = [fetchPage(1), fetchPage(2), fetchPage(3)];
+        const results = await Promise.all(pagePromises);
+        historicalData = results.flat();
 
         // Limit to 48 days
         historicalData = historicalData.slice(0, 48);
@@ -259,49 +286,58 @@ async function startServer() {
       ];
       
       const fetchPage = async (page: number) => {
-        // Explicitly KOSPI (sosok=0)
-        const url = `https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page=${page}`;
-        const response = await axios.get(url, {
-          headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://finance.naver.com/sise/sise_market_sum.naver'
-          },
-          responseType: 'arraybuffer',
-          timeout: 10000 // Increase timeout
-        });
-        
-        const decodedBody = iconv.decode(Buffer.from(response.data), 'euc-kr');
-        const $ = cheerio.load(decodedBody);
-        const stocks: { name: string, code: string }[] = [];
+        try {
+          // Explicitly KOSPI (sosok=0)
+          const url = `https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page=${page}`;
+          const response = await axios.get(url, {
+            headers: { 
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+              'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+              'Referer': 'https://finance.naver.com/sise/sise_market_sum.naver',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            },
+            responseType: 'arraybuffer',
+            timeout: 10000 
+          });
+          
+          const decodedBody = iconv.decode(Buffer.from(response.data), 'euc-kr');
+          const $ = cheerio.load(decodedBody);
+          const stocks: { name: string, code: string }[] = [];
 
-        // Naver's table for market sum is type_2
-        $('table.type_2 tbody tr').each((i, el) => {
-          const nameLink = $(el).find('a.tltle');
-          if (nameLink.length) {
-            const name = nameLink.text().trim();
-            const href = nameLink.attr('href') || '';
-            const codeMatch = href.match(/code=(\d+)/);
-            
-            if (codeMatch) {
-              const code = codeMatch[1];
-              // ETF Filtering
-              const isETF = etfProviders.some(p => name.toUpperCase().includes(p.toUpperCase()));
-              if (!isETF) {
-                stocks.push({ name, code });
+          // Naver's table for market sum is type_2
+          $('table.type_2 tbody tr').each((i, el) => {
+            const nameLink = $(el).find('a.tltle');
+            if (nameLink.length) {
+              const name = nameLink.text().trim();
+              const href = nameLink.attr('href') || '';
+              const codeMatch = href.match(/code=(\d+)/);
+              
+              if (codeMatch) {
+                const code = codeMatch[1];
+                // ETF Filtering
+                const isETF = etfProviders.some(p => name.toUpperCase().includes(p.toUpperCase()));
+                if (!isETF) {
+                  stocks.push({ name, code });
+                }
               }
             }
-          }
-        });
-        return stocks;
+          });
+          return stocks;
+        } catch (err) {
+          console.warn(`Failed to fetch top stocks page ${page}:`, err instanceof Error ? err.message : err);
+          return [];
+        }
       };
 
-      // Fetch pages sequentially to avoid aggressive blocking
-      const allStocks: { name: string, code: string }[] = [];
-      for (let i = 1; i <= 4; i++) {
-        const pageStocks = await fetchPage(i);
-        allStocks.push(...pageStocks);
-        if (allStocks.length >= 100) break;
+      // Fetch 4 pages in parallel for speed, but handle individual page failures
+      const pagePromises = [fetchPage(1), fetchPage(2), fetchPage(3), fetchPage(4)];
+      const pageResults = await Promise.all(pagePromises);
+      const allStocks = pageResults.flat();
+      
+      if (allStocks.length === 0) {
+        throw new Error('No stocks could be fetched from Naver Finance. Possible block or layout change.');
       }
       
       res.json(allStocks.slice(0, 100));

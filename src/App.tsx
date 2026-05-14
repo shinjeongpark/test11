@@ -115,7 +115,7 @@ export default function App() {
   };
 
   const getLatestData = () => {
-    if (!stock || !stock.historicalData.length) return null;
+    if (!stock || !stock.historicalData || !stock.historicalData.length) return null;
     return stock.historicalData[0];
   };
 
@@ -310,29 +310,29 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className={`p-4 border-2 flex items-center gap-4 transition-all ${stock.indicators.buyPoint1 ? 'border-green-600 bg-green-50 shadow-lg' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
-                        <div className={`w-10 h-10 shrink-0 border-2 flex items-center justify-center ${stock.indicators.buyPoint1 ? 'border-green-600 bg-green-600 text-white animate-bounce' : 'border-slate-300 text-slate-300'}`}>
+                      <div className={`p-4 border-2 flex items-center gap-4 transition-all ${stock.indicators && stock.indicators.buyPoint1 ? 'border-green-600 bg-green-50 shadow-lg' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
+                        <div className={`w-10 h-10 shrink-0 border-2 flex items-center justify-center ${stock.indicators && stock.indicators.buyPoint1 ? 'border-green-600 bg-green-600 text-white animate-bounce' : 'border-slate-300 text-slate-300'}`}>
                           <Info className="w-5 h-5" />
                         </div>
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">1차 매수타점 (MA48)</p>
-                          <p className={`text-[11px] font-black ${stock.indicators.buyPoint1 ? 'text-green-600' : 'text-slate-400'}`}>
-                            {stock.indicators.buyPoint1 ? '진입구간 (ENTRY)' : '대기중 (WAIT)'}
+                          <p className={`text-[11px] font-black ${stock.indicators && stock.indicators.buyPoint1 ? 'text-green-600' : 'text-slate-400'}`}>
+                            {stock.indicators && stock.indicators.buyPoint1 ? '진입구간 (ENTRY)' : '대기중 (WAIT)'}
                           </p>
-                          {stock.indicators.ma48 > 0 && <p className="text-[9px] font-mono text-slate-400">Target: {formatNumber(Math.round(stock.indicators.ma48))}</p>}
+                          {stock.indicators && stock.indicators.ma48 > 0 && <p className="text-[9px] font-mono text-slate-400">Target: {formatNumber(Math.round(stock.indicators.ma48))}</p>}
                         </div>
                       </div>
 
-                      <div className={`p-4 border-2 flex items-center gap-4 transition-all ${stock.indicators.buyPoint2 ? 'border-purple-600 bg-purple-50 shadow-lg' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
-                        <div className={`w-10 h-10 shrink-0 border-2 flex items-center justify-center ${stock.indicators.buyPoint2 ? 'border-purple-600 bg-purple-600 text-white animate-bounce' : 'border-slate-300 text-slate-300'}`}>
+                      <div className={`p-4 border-2 flex items-center gap-4 transition-all ${stock.indicators && stock.indicators.buyPoint2 ? 'border-purple-600 bg-purple-50 shadow-lg' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
+                        <div className={`w-10 h-10 shrink-0 border-2 flex items-center justify-center ${stock.indicators && stock.indicators.buyPoint2 ? 'border-purple-600 bg-purple-600 text-white animate-bounce' : 'border-slate-300 text-slate-300'}`}>
                           <BarChart3 className="w-5 h-5" />
                         </div>
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">2차 매수타점 (MA20-20%)</p>
-                          <p className={`text-[11px] font-black ${stock.indicators.buyPoint2 ? 'text-purple-600' : 'text-slate-400'}`}>
-                            {stock.indicators.buyPoint2 ? '강력매수 (STRONG)' : '관망중 (HOLD)'}
+                          <p className={`text-[11px] font-black ${stock.indicators && stock.indicators.buyPoint2 ? 'text-purple-600' : 'text-slate-400'}`}>
+                            {stock.indicators && stock.indicators.buyPoint2 ? '강력매수 (STRONG)' : '관망중 (HOLD)'}
                           </p>
-                          {stock.indicators.ma20 > 0 && <p className="text-[9px] font-mono text-slate-400">Target: {formatNumber(Math.round(stock.indicators.ma20 * 0.8))}</p>}
+                          {stock.indicators && stock.indicators.ma20 > 0 && <p className="text-[9px] font-mono text-slate-400">Target: {formatNumber(Math.round(stock.indicators.ma20 * 0.8))}</p>}
                         </div>
                       </div>
                     </div>
@@ -364,7 +364,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="text-[13px]">
-                          {stock.historicalData.map((day, idx) => (
+                          {(stock.historicalData || []).map((day, idx) => (
                             <tr key={day.date} className={`border-b border-slate-200 hover:bg-white transition-colors ${idx === 0 ? 'bg-blue-50/30' : ''}`}>
                               <td className="py-4 font-bold text-slate-700">{day.date}</td>
                               <td className="py-4 font-mono font-bold">{formatNumber(day.price)}</td>
@@ -431,7 +431,7 @@ export default function App() {
                        </div>
                        <div className="flex gap-4">
                           <div className="px-6 py-3 border border-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                             Float Ratio: {(stock.floatShares / stock.sharesOutstanding * 100).toFixed(1)}%
+                             Float Ratio: {((stock.floatShares || 0) / (stock.sharesOutstanding || 1) * 100).toFixed(1)}%
                           </div>
                        </div>
                     </div>
