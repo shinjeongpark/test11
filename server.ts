@@ -259,20 +259,23 @@ async function startServer() {
       ];
       
       const fetchPage = async (page: number) => {
-        const url = `https://finance.naver.com/sise/sise_market_sum.naver?&page=${page}`;
+        // Explicitly KOSPI (sosok=0)
+        const url = `https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page=${page}`;
         const response = await axios.get(url, {
           headers: { 
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer': 'https://finance.naver.com/sise/sise_market_sum.naver'
           },
           responseType: 'arraybuffer',
-          timeout: 5000
+          timeout: 10000 // Increase timeout
         });
         
         const decodedBody = iconv.decode(Buffer.from(response.data), 'euc-kr');
         const $ = cheerio.load(decodedBody);
         const stocks: { name: string, code: string }[] = [];
 
+        // Naver's table for market sum is type_2
         $('table.type_2 tbody tr').each((i, el) => {
           const nameLink = $(el).find('a.tltle');
           if (nameLink.length) {
@@ -293,18 +296,20 @@ async function startServer() {
         return stocks;
       };
 
-      // Fetch 4 pages in parallel for speed
-      const pageResults = await Promise.all([
-        fetchPage(1),
-        fetchPage(2),
-        fetchPage(3),
-        fetchPage(4)
-      ]);
+      // Fetch pages sequentially to avoid aggressive blocking
+      const allStocks: { name: string, code: string }[] = [];
+      for (let i = 1; i <= 4; i++) {
+        const pageStocks = await fetchPage(i);
+        allStocks.push(...pageStocks);
+        if (allStocks.length >= 100) break;
+      }
       
-      const allStocks = pageResults.flat();
       res.json(allStocks.slice(0, 100));
     } catch (error: any) {
       console.error('Error fetching top stocks:', error.message);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+      }
       res.status(500).json({ error: error.message });
     }
   });
