@@ -87,10 +87,12 @@ async function startServer() {
           const naverUrl = `https://finance.naver.com/item/frgn.naver?code=${code}&page=${page}`;
           const naverRes = await axios.get(naverUrl, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+              'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
               'Referer': `https://finance.naver.com/item/main.naver?code=${code}`
             },
-            responseType: 'arraybuffer'
+            responseType: 'arraybuffer',
+            timeout: 5000
           });
           const decodedNaverBody = iconv.decode(Buffer.from(naverRes.data), 'euc-kr');
           const $ = cheerio.load(decodedNaverBody);
@@ -251,23 +253,26 @@ async function startServer() {
   // Top 100 Stocks from Naver Finance
   app.get("/api/top-stocks", async (req, res) => {
     try {
-      const topStocks: { name: string, code: string }[] = [];
       const etfProviders = [
         'KODEX', 'TIGER', 'ACE', 'KBSTAR', 'HANARO', 'SOL', 'KOSEF', 'ARIRANG', 
         'WOORI', 'TIMEFOLIO', 'PLUS', 'KINDEX', 'RISE', 'TREX', '파워', '마이티'
       ];
       
-      // Fetch more pages as we'll be filtering out ETFs
-      for (let page = 1; page <= 4; page++) {
+      const fetchPage = async (page: number) => {
         const url = `https://finance.naver.com/sise/sise_market_sum.naver?&page=${page}`;
         const response = await axios.get(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          responseType: 'arraybuffer'
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+          },
+          responseType: 'arraybuffer',
+          timeout: 5000
         });
         
         const decodedBody = iconv.decode(Buffer.from(response.data), 'euc-kr');
         const $ = cheerio.load(decodedBody);
-        
+        const stocks: { name: string, code: string }[] = [];
+
         $('table.type_2 tbody tr').each((i, el) => {
           const nameLink = $(el).find('a.tltle');
           if (nameLink.length) {
@@ -280,16 +285,26 @@ async function startServer() {
               // ETF Filtering
               const isETF = etfProviders.some(p => name.toUpperCase().includes(p.toUpperCase()));
               if (!isETF) {
-                topStocks.push({ name, code });
+                stocks.push({ name, code });
               }
             }
           }
         });
-        if (topStocks.length >= 100) break;
-      }
+        return stocks;
+      };
+
+      // Fetch 4 pages in parallel for speed
+      const pageResults = await Promise.all([
+        fetchPage(1),
+        fetchPage(2),
+        fetchPage(3),
+        fetchPage(4)
+      ]);
       
-      res.json(topStocks.slice(0, 100));
+      const allStocks = pageResults.flat();
+      res.json(allStocks.slice(0, 100));
     } catch (error: any) {
+      console.error('Error fetching top stocks:', error.message);
       res.status(500).json({ error: error.message });
     }
   });

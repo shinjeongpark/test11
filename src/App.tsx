@@ -54,6 +54,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [topStocks, setTopStocks] = useState<{ name: string; code: string }[]>([]);
+  const [topStocksLoading, setTopStocksLoading] = useState(false);
+  const [topStocksError, setTopStocksError] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -62,11 +64,16 @@ export default function App() {
   }, []);
 
   const fetchTopStocks = async () => {
+    setTopStocksLoading(true);
+    setTopStocksError(false);
     try {
       const response = await axios.get('/api/top-stocks');
       setTopStocks(response.data);
     } catch (err) {
       console.error('Failed to fetch top stocks:', err);
+      setTopStocksError(true);
+    } finally {
+      setTopStocksLoading(false);
     }
   };
 
@@ -155,21 +162,41 @@ export default function App() {
             <div className="p-6 border-b border-slate-200">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Market Monitoring (Top 100)</h3>
               <div className="space-y-1">
-                {topStocks.map((s) => (
-                  <button
-                    key={s.code}
-                    onClick={() => {
-                      setSearchTerm(s.code);
-                      fetchStockData(s.code);
-                    }}
-                    className={`w-full flex justify-between items-center p-3 transition-all border ${
-                      searchTerm === s.code ? 'bg-white border-slate-300 shadow-sm' : 'bg-transparent border-transparent hover:bg-white hover:border-slate-200'
-                    }`}
-                  >
-                    <span className="font-black text-[11px] uppercase tracking-tighter shrink-0">{s.code}</span>
-                    <span className="text-[10px] text-slate-500 font-bold truncate ml-2 text-right">{s.name}</span>
-                  </button>
-                ))}
+                {topStocksLoading ? (
+                  <div className="p-4 flex justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+                  </div>
+                ) : topStocksError ? (
+                  <div className="p-4 text-center">
+                    <p className="text-[9px] font-black text-red-400 uppercase mb-2">Error Loading List</p>
+                    <button 
+                      onClick={fetchTopStocks}
+                      className="text-[9px] font-black text-blue-600 uppercase underline hover:text-blue-800"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : topStocks.length === 0 ? (
+                  <div className="p-4 text-center text-[9px] font-black text-slate-400 uppercase">
+                    No items found
+                  </div>
+                ) : (
+                  topStocks.map((s) => (
+                    <button
+                      key={s.code}
+                      onClick={() => {
+                        setSearchTerm(s.code);
+                        fetchStockData(s.code);
+                      }}
+                      className={`w-full flex justify-between items-center p-3 transition-all border ${
+                        searchTerm === s.code ? 'bg-white border-slate-300 shadow-sm' : 'bg-transparent border-transparent hover:bg-white hover:border-slate-200'
+                      }`}
+                    >
+                      <span className="font-black text-[11px] uppercase tracking-tighter shrink-0">{s.code}</span>
+                      <span className="text-[10px] text-slate-500 font-bold truncate ml-2 text-right">{s.name}</span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
             <div className="p-6 flex-1 bg-gradient-to-b from-slate-50 to-slate-100">
