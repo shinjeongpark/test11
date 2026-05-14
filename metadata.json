@@ -1,0 +1,6 @@
+{
+  "name": "K-Stock Info",
+  "description": "한국 주식의 유통주식수와 종가 정보를 한눈에 확인할 수 있는 대시보드",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
