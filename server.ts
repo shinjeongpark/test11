@@ -6,7 +6,9 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
 
-const yf = new YahooFinance();
+// Initialize Yahoo Finance instance correctly
+// Handling both direct class import and default property wrap for ESM/CJS compatibility
+const yf = new (typeof YahooFinance === 'function' ? YahooFinance : (YahooFinance as any).default)();
 
 async function startServer() {
   const app = express();
@@ -140,7 +142,7 @@ async function startServer() {
         try {
           const threeMonthsAgo = new Date();
           threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 4); // Fetch 4 months to be safe
-          const chartData = await yf.chart(targetSymbol, { period1: threeMonthsAgo, interval: '1d' });
+          const chartData = (await yf.chart(targetSymbol, { period1: threeMonthsAgo, interval: '1d' })) as any;
           
           if (chartData && chartData.quotes && chartData.quotes.length > 0) {
             const quotes = chartData.quotes.filter((q: any) => q.close !== undefined);
