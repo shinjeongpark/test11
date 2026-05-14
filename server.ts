@@ -1,14 +1,19 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import YahooFinance from 'yahoo-finance2';
+import yfModule from 'yahoo-finance2';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
 
-// Initialize Yahoo Finance instance correctly
-// Handling both direct class import and default property wrap for ESM/CJS compatibility
-const yf = new (typeof YahooFinance === 'function' ? YahooFinance : (YahooFinance as any).default)();
+// Initialize Yahoo Finance instance correctly for both ESM/CJS and bundles
+let yf: any = yfModule;
+if ((yfModule as any).default) {
+  yf = (yfModule as any).default;
+}
+if (typeof yf === 'function') {
+  yf = new yf();
+}
 
 async function startServer() {
   const app = express();
